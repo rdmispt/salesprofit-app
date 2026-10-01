@@ -15,11 +15,59 @@
     <!-- Font Inter & FontAwesome -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- html2pdf.js untuk Cetak PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
     <style>
         body { font-family: 'Inter', sans-serif; }
+        
+        /* Spinner Animasi */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4f46e5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Khusus untuk tampilan cetak PDF */
+        #pdfPrintArea {
+            background-color: white;
+            padding: 20px;
+            color: black;
+        }
+        #pdfPrintArea table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        #pdfPrintArea th, #pdfPrintArea td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            font-size: 12px;
+        }
+        #pdfPrintArea th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900/50 backdrop-blur-sm hidden">
+        <div class="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center">
+            <div class="loader mb-4"></div>
+            <p class="text-slate-800 font-semibold" id="loadingText">Menyinkronkan Data...</p>
+        </div>
+    </div>
 
     <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -29,7 +77,7 @@
                 </div>
                 <div>
                     <h1 class="font-bold text-lg text-slate-900 leading-tight">SalesProfit Sheets</h1>
-                    <p class="text-xs text-slate-500">Nomor Pesanan, Nominal Cair, HPP & Hasil Selisih</p>
+                    <p class="text-xs text-slate-500 hidden sm:block">Nomor Pesanan, Nominal Cair, HPP & Hasil Selisih</p>
                 </div>
             </div>
             <div class="flex items-center space-x-3">
@@ -47,7 +95,7 @@
                 <i class="fa-solid fa-chart-pie mr-2"></i>Penjualan & Dashboard
             </button>
             <button onclick="switchTab('produk')" id="btnTabProduk" class="py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300 transition">
-                <i class="fa-solid fa-box-open mr-2"></i>Master Data Produk (HPP)
+                <i class="fa-solid fa-box-open mr-2"></i>Master Produk (HPP)
             </button>
         </div>
     </div>
@@ -127,7 +175,7 @@
                             </div>
 
                             <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Jumlah Nominal yang Cair (Rp)</label>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Jumlah Nominal Cair (Rp)</label>
                                 <input type="text" id="nominalCair" required placeholder="Contoh: 500.000" oninput="formatRupiahInput(this)" 
                                     class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition">
                             </div>
@@ -141,7 +189,7 @@
                                     </select>
                                 </div>
                                 <div class="col-span-1">
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Jumlah (X)</label>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Jml (x)</label>
                                     <input type="number" id="qtyPesanan" required min="1" value="1" oninput="updateHppOtomatis()"
                                         class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition text-center">
                                 </div>
@@ -178,9 +226,13 @@
                                 <p class="text-xs text-slate-500">Nomor Pesanan, Nominal Cair dikurangi HPP Produk.</p>
                             </div>
                             <div class="flex items-center space-x-2">
+                                <button onclick="openPdfPreviewModal()" class="inline-flex items-center space-x-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition border border-rose-200">
+                                    <i class="fa-solid fa-file-pdf text-rose-600"></i>
+                                    <span>Cetak PDF</span>
+                                </button>
                                 <button onclick="exportToCSV()" class="inline-flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition border border-slate-200">
-                                    <i class="fa-solid fa-download text-indigo-600"></i>
-                                    <span>Download CSV</span>
+                                    <i class="fa-solid fa-file-csv text-indigo-600"></i>
+                                    <span class="hidden sm:inline">CSV</span>
                                 </button>
                                 <button onclick="clearAllData()" class="inline-flex items-center space-x-1 bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs px-3 py-2 rounded-xl transition border border-red-200" title="Hapus Semua">
                                     <i class="fa-solid fa-trash-can"></i>
@@ -199,13 +251,13 @@
                             <div class="flex items-center space-x-2 w-full sm:w-auto">
                                 <label class="text-xs font-semibold text-slate-500 hidden sm:block">Filter Tanggal:</label>
                                 <input type="date" id="filterTanggal" onchange="applyFilters()"
-                                    class="px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full sm:w-auto">
+                                    class="px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full sm:w-auto cursor-pointer">
                                 <button onclick="clearDateFilter()" class="text-slate-400 hover:text-red-500 transition px-2" title="Hapus Filter Tanggal">
                                     <i class="fa-solid fa-xmark text-lg"></i>
                                 </button>
                             </div>
-                            <div class="text-xs text-slate-500 font-medium whitespace-nowrap self-start sm:self-center">
-                                Total: <span id="totalCount" class="font-bold text-slate-800">0</span> Transaksi
+                            <div class="text-xs text-slate-500 font-medium whitespace-nowrap self-start sm:self-center bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                                Total: <span id="totalCount" class="font-bold text-indigo-600">0</span> Data
                             </div>
                         </div>
 
@@ -302,6 +354,76 @@
         </div>
     </main>
 
+    <!-- Modal PDF Preview -->
+    <div id="pdfPreviewModal" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/70 backdrop-blur-sm hidden p-4 sm:p-8">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl flex flex-col max-h-full overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div>
+                    <h3 class="font-bold text-slate-900 flex items-center space-x-2">
+                        <i class="fa-solid fa-file-pdf text-rose-600"></i>
+                        <span>Preview Cetak PDF</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-1" id="pdfSubtitle">Data sesuai filter saat ini</p>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button onclick="downloadPDF()" class="bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold py-2 px-4 rounded-xl shadow-md transition flex items-center space-x-2">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Download PDF</span>
+                    </button>
+                    <button onclick="closePdfPreviewModal()" class="text-slate-400 hover:text-slate-600 bg-slate-200 hover:bg-slate-300 rounded-full w-8 h-8 flex items-center justify-center transition">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Area yang akan dirender jadi PDF -->
+            <div class="p-6 overflow-y-auto flex-1 bg-slate-100">
+                <div id="pdfPrintArea" class="mx-auto shadow-md max-w-[800px]">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h2 style="margin: 0; font-size: 24px; color: #333;">Laporan Hasil Selisih Penjualan</h2>
+                        <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;" id="pdfDateRange">Semua Tanggal</p>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 20px; background-color: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <div>
+                            <p style="margin: 0; font-size: 12px; color: #64748b;">Total Nominal Cair</p>
+                            <h4 style="margin: 5px 0 0 0; font-size: 18px; color: #1e293b;" id="pdfTotalCair">Rp 0</h4>
+                        </div>
+                        <div>
+                            <p style="margin: 0; font-size: 12px; color: #64748b;">Total HPP</p>
+                            <h4 style="margin: 5px 0 0 0; font-size: 18px; color: #e11d48;" id="pdfTotalHpp">Rp 0</h4>
+                        </div>
+                        <div>
+                            <p style="margin: 0; font-size: 12px; color: #64748b;">Total Profit (Selisih)</p>
+                            <h4 style="margin: 5px 0 0 0; font-size: 18px; color: #059669;" id="pdfTotalProfit">Rp 0</h4>
+                        </div>
+                    </div>
+
+                    <table id="pdfTable">
+                        <thead>
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Nama Akun</th>
+                                <th>No. Pesanan</th>
+                                <th>Produk (Qty)</th>
+                                <th>Nominal Cair</th>
+                                <th>Total HPP</th>
+                                <th>Selisih</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pdfTableBody">
+                            <!-- Diisi oleh JS -->
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 30px; text-align: right; font-size: 12px; color: #888;">
+                        <p>Dicetak pada: <span id="pdfPrintDate"></span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="syncModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm hidden">
         <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 overflow-hidden border border-slate-200">
             <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -326,7 +448,7 @@
                     <div class="text-indigo-600 mt-0.5"><i class="fa-solid fa-cloud-arrow-down text-xl"></i></div>
                     <div>
                         <h4 class="text-sm font-bold text-indigo-900 mb-1">Tarik & Pulihkan Data dari Sheets</h4>
-                        <p class="text-xs text-indigo-800 mb-3">Sistem pintar ini akan menarik semua riwayat transaksi dari Google Sheets, <b>sekaligus otomatis membuat ulang Master Data Produk</b> berdasarkan riwayat tersebut jika hilang.</p>
+                        <p class="text-xs text-indigo-800 mb-3">Tarik seluruh riwayat transaksi sekaligus Master Data Produk dari tab "Transaksi" dan "Produk" di Google Sheets Anda.</p>
                         <button onclick="importFromGoogleSheets()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2 px-4 rounded-lg shadow-sm transition inline-flex items-center">
                             <i class="fa-solid fa-download mr-2"></i> Mulai Tarik Data
                         </button>
@@ -336,7 +458,7 @@
 
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end space-x-3">
                 <button onclick="closeSyncModal()" class="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-200 transition">Tutup</button>
-                <button onclick="saveWebhook()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-900 text-white transition shadow-sm">Simpan Konfigurasi Webhook</button>
+                <button onclick="saveWebhook()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-900 text-white transition shadow-sm">Simpan Konfigurasi</button>
             </div>
         </div>
     </div>
@@ -355,6 +477,18 @@
         let dataList = [];
         let webhookEndpoint = ''; 
         let katalogProduk = [];
+        
+        // Data yang sedang difilter (untuk PDF)
+        let currentFilteredData = [];
+
+        // Loading Control
+        function showLoading(text) {
+            document.getElementById('loadingText').textContent = text || 'Memproses...';
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+        }
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
 
         // Inisialisasi Saat Halaman Dimuat
         window.onload = function() {
@@ -382,7 +516,13 @@
                 if (storedTransaksi) dataList = JSON.parse(storedTransaksi);
                 
                 // Pastikan terurut dari terbaru
-                dataList.sort((a, b) => (b.timestampMs || 0) - (a.timestampMs || 0));
+                dataList.sort((a, b) => {
+                    // Sort by tanggalInput first (descending)
+                    if (a.tanggalInput > b.tanggalInput) return -1;
+                    if (a.tanggalInput < b.tanggalInput) return 1;
+                    // If same date, sort by timestampMs
+                    return (b.timestampMs || 0) - (a.timestampMs || 0);
+                });
             } catch(e) {
                 console.error("Gagal membaca memori lokal", e);
                 katalogProduk = []; dataList = [];
@@ -414,7 +554,7 @@
                 btnPenjualan.className = "py-4 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 transition";
                 btnPenjualan.innerHTML = '<i class="fa-solid fa-chart-pie mr-2"></i>Penjualan & Dashboard';
                 btnProduk.className = "py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300 transition";
-                btnProduk.innerHTML = '<i class="fa-solid fa-box-open mr-2"></i>Master Data Produk (HPP)';
+                btnProduk.innerHTML = '<i class="fa-solid fa-box-open mr-2"></i>Master Produk (HPP)';
             } else {
                 tabPenjualan.classList.remove('block');
                 tabPenjualan.classList.add('hidden');
@@ -422,12 +562,15 @@
                 tabProduk.classList.add('block');
 
                 btnProduk.className = "py-4 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 transition";
-                btnProduk.innerHTML = '<i class="fa-solid fa-box-open mr-2"></i>Master Data Produk (HPP)';
+                btnProduk.innerHTML = '<i class="fa-solid fa-box-open mr-2"></i>Master Produk (HPP)';
                 btnPenjualan.className = "py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300 transition";
                 btnPenjualan.innerHTML = '<i class="fa-solid fa-chart-pie mr-2"></i>Penjualan & Dashboard';
             }
         }
 
+        // ==========================================
+        // MANAJEMEN PRODUK (HPP)
+        // ==========================================
         window.handleProductSubmit = async function(e) {
             e.preventDefault();
 
@@ -462,7 +605,7 @@
                     // Simpan Perubahan Produk ke Google Sheets
                     if (webhookEndpoint) sendToGoogleSheets({ action: 'save_produk', id: editId, nama: nama, hpp: hpp });
 
-                    showAlert(`Produk diperbarui & ${transaksiDiubah} transaksi terkait telah disesuaikan!`, 'success');
+                    showAlert(`Produk diperbarui & ${transaksiDiubah} transaksi terkait disesuaikan!`, 'success');
                 }
             } else {
                 // Mode Tambah Produk Baru
@@ -525,15 +668,17 @@
         }
 
         window.deleteProduct = function(id) {
-            katalogProduk = katalogProduk.filter(p => p.id !== id);
-            saveLocalData();
-            renderProductTable();
-            initDropdownProduk();
-            
-            // Hapus Produk dari Google Sheets
-            if (webhookEndpoint) sendToGoogleSheets({ action: 'delete_produk', id: id });
+            if(confirm("Yakin ingin menghapus produk ini? (Data transaksi lama tidak akan terpengaruh)")) {
+                katalogProduk = katalogProduk.filter(p => p.id !== id);
+                saveLocalData();
+                renderProductTable();
+                initDropdownProduk();
+                
+                // Hapus Produk dari Google Sheets
+                if (webhookEndpoint) sendToGoogleSheets({ action: 'delete_produk', id: id });
 
-            showAlert('Produk dihapus dari memori.', 'info');
+                showAlert('Produk dihapus dari memori.', 'info');
+            }
         }
         
         function initDropdownProduk() {
@@ -558,6 +703,9 @@
             document.getElementById('hppProduk').value = totalHpp > 0 ? totalHpp.toLocaleString('id-ID') : '';
         }
 
+        // ==========================================
+        // UTILITAS RUPIAH
+        // ==========================================
         window.formatRupiahInput = function(input) {
             let value = input.value.replace(/[^,\d]/g, '').toString();
             let split = value.split(',');
@@ -573,6 +721,9 @@
             return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
         }
 
+        // ==========================================
+        // MANAJEMEN TRANSAKSI PENJUALAN
+        // ==========================================
         window.handleFormSubmit = async function(e) {
             e.preventDefault();
 
@@ -603,10 +754,17 @@
 
             // Tambahkan ke array dan simpan
             dataList.unshift(newItem); // Taruh paling atas
+            // Sortir ulang setelah menambah
+            dataList.sort((a, b) => {
+                if (a.tanggalInput > b.tanggalInput) return -1;
+                if (a.tanggalInput < b.tanggalInput) return 1;
+                return (b.timestampMs || 0) - (a.timestampMs || 0);
+            });
+
             saveLocalData();
             applyFilters(); // Render ulang tabel dan statistik
 
-            // Reset form sebagian
+            // Reset form sebagian (Tanggal tidak direset agar cepat entry data di hari yang sama)
             document.getElementById('namaAkun').value = '';
             document.getElementById('noPesanan').value = '';
             document.getElementById('nominalCair').value = '';
@@ -615,9 +773,9 @@
             document.getElementById('qtyPesanan').value = '1';
             document.getElementById('hppProduk').value = '';
             
-            showAlert('Transaksi berhasil disimpan ke memori HP!', 'success');
+            showAlert('Transaksi berhasil disimpan!', 'success');
             
-            // Kirim ke Sheets di latar belakang
+            // Kirim ke Sheets di latar belakang (tanpa blocking layar)
             if (webhookEndpoint) {
                 const payload = { action: 'save_transaksi', ...newItem };
                 sendToGoogleSheets(payload);
@@ -678,7 +836,7 @@
             const searchQuery = document.getElementById('searchInput').value.toLowerCase();
             const dateFilter = document.getElementById('filterTanggal').value;
 
-            const filteredData = dataList.filter(item => {
+            currentFilteredData = dataList.filter(item => {
                 const matchesSearch = item.noPesanan.toLowerCase().includes(searchQuery) || 
                                       (item.namaAkun && item.namaAkun.toLowerCase().includes(searchQuery));
                 
@@ -694,8 +852,8 @@
                 return matchesSearch && matchesDate;
             });
 
-            renderTable(filteredData);
-            updateDashboardStats(filteredData);
+            renderTable(currentFilteredData);
+            updateDashboardStats(currentFilteredData);
         }
 
         window.clearDateFilter = function() {
@@ -704,10 +862,12 @@
         }
 
         window.deleteItem = function(id) {
-            dataList = dataList.filter(d => d.id !== id);
-            saveLocalData();
-            applyFilters();
-            showAlert('Data transaksi dihapus dari memori HP.', 'info');
+            if(confirm("Yakin ingin menghapus data transaksi ini?")) {
+                dataList = dataList.filter(d => d.id !== id);
+                saveLocalData();
+                applyFilters();
+                showAlert('Data transaksi dihapus.', 'info');
+            }
         }
 
         window.clearAllData = function() {
@@ -720,29 +880,20 @@
             }
         }
 
+        // ==========================================
+        // EKSPOR & SINKRONISASI
+        // ==========================================
         window.exportToCSV = function() {
-            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+            if (currentFilteredData.length === 0) return showAlert('Tidak ada data untuk diekspor!', 'error');
+
             const dateFilter = document.getElementById('filterTanggal').value;
-            
-            const dataToExport = dataList.filter(item => {
-                const matchesSearch = item.noPesanan.toLowerCase().includes(searchQuery) || 
-                                      (item.namaAkun && item.namaAkun.toLowerCase().includes(searchQuery));
-                let matchesDate = true;
-                if (dateFilter) {
-                    let itemDate = item.tanggalInput;
-                    if (!itemDate && item.timestampMs) itemDate = new Date(item.timestampMs).toISOString().split('T')[0];
-                    matchesDate = itemDate === dateFilter;
-                }
-                return matchesSearch && matchesDate;
-            });
-
-            if (dataToExport.length === 0) return showAlert('Tidak ada data untuk diekspor!', 'error');
-
             let csvContent = "data:text/csv;charset=utf-8,Waktu Input,Tanggal Transaksi,Nama Akun,No Pesanan,Jumlah (Qty),Nama Produk,Nominal Cair,Total HPP,Hasil Selisih,Catatan\r\n";
-            dataToExport.forEach(row => {
+            
+            currentFilteredData.forEach(row => {
                 const safeCatatan = (row.catatan || '').replace(/"/g, '""');
                 csvContent += `"${row.timestamp}","${row.tanggalInput || '-'}","${row.namaAkun || '-'}","${row.noPesanan}","${row.qty || 1}","${row.namaProduk}",${row.nominalCair},${row.hppProduk},${row.hasilSelisih},"${safeCatatan}"\r\n`;
             });
+            
             const link = document.createElement("a");
             link.href = encodeURI(csvContent);
             link.download = `Laporan_Penjualan_${dateFilter || new Date().toISOString().slice(0,10)}.csv`;
@@ -769,8 +920,8 @@
                 return;
             }
             
-            showAlert('Memproses tarikan data dari Sheets...', 'info');
             document.getElementById('syncModal').classList.add('hidden');
+            showLoading('Menarik Data dari Google Sheets...'); // Tampilkan Loading Spinner
             
             try {
                 const response = await fetch(webhookEndpoint);
@@ -778,10 +929,8 @@
                 
                 if (importedData) {
                     let successCount = 0;
-                    let restoredProductCount = 0;
-                    let newDataList = []; 
                     
-                    // 1. Tarik Data Master Produk Terlebih Dahulu (Jika Ada)
+                    // 1. Tarik Data Master Produk (Bisa jadi diedit di Sheets)
                     if (importedData.produk && importedData.produk.length > 0) {
                         katalogProduk = importedData.produk.map(p => ({
                             id: p.id,
@@ -789,11 +938,11 @@
                             hpp: Number(p.hpp) || 0,
                             timestampMs: Date.now()
                         }));
-                        restoredProductCount = katalogProduk.length;
                     }
                     
                     // 2. Tarik Data Transaksi Penjualan
                     const transaksiList = importedData.transaksi || [];
+                    let newDataList = []; 
                     
                     for (const item of transaksiList) {
                         if (!item.noPesanan) continue;
@@ -820,21 +969,6 @@
 
                         newDataList.push(newItem);
                         successCount++;
-
-                        // Cek ganda: Jika ada transaksi lama namun produknya belum ada di katalog (Bisa jadi terhapus)
-                        if (item.namaProduk && item.namaProduk !== '-' && hppProduk > 0) {
-                            const isExist = katalogProduk.some(p => p.nama.trim().toLowerCase() === String(item.namaProduk).trim().toLowerCase());
-                            
-                            if (!isExist) {
-                                const newProdId = 'PROD-RESTORE-' + Math.random().toString(36).substr(2, 9);
-                                const baseHpp = hppProduk / qty;
-                                katalogProduk.push({ id: newProdId, nama: item.namaProduk, hpp: baseHpp, timestampMs: Date.now() });
-                                restoredProductCount++;
-                                
-                                // Simpan kembali produk yang baru dipulihkan ini ke tab Produk di Sheets
-                                sendToGoogleSheets({ action: 'save_produk', id: newProdId, nama: item.namaProduk, hpp: baseHpp });
-                            }
-                        }
                     }
                     
                     // Timpa memori HP dengan data terbaru dari Sheets
@@ -842,26 +976,122 @@
                     saveLocalData();
                     loadLocalData(); // Refresh UI
                     
-                    showAlert(`Berhasil memuat ${successCount} transaksi & memulihkan ${restoredProductCount} master produk!`, 'success');
+                    hideLoading(); // Sembunyikan Loading
+                    showAlert(`Sinkronisasi Selesai! Berhasil memuat ${successCount} transaksi.`, 'success');
                 } else {
+                    hideLoading();
                     showAlert('Data di Google Sheets kosong atau tidak valid.', 'error');
                 }
             } catch (error) {
+                hideLoading();
                 console.error(error);
                 showAlert('Gagal menarik data. Pastikan Webhook URL Anda benar.', 'error');
             }
         }
+        
+        // ==========================================
+        // FITUR PREVIEW & CETAK PDF
+        // ==========================================
+        window.openPdfPreviewModal = function() {
+            if (currentFilteredData.length === 0) {
+                return showAlert('Tidak ada data untuk dicetak!', 'error');
+            }
+            
+            const dateFilter = document.getElementById('filterTanggal').value;
+            const subtitle = document.getElementById('pdfSubtitle');
+            const dateRangeText = document.getElementById('pdfDateRange');
+            
+            // Set Text Keterangan
+            if (dateFilter) {
+                const dObj = new Date(dateFilter);
+                const prettyDate = dObj.toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'});
+                subtitle.textContent = `Data transaksi untuk: ${prettyDate}`;
+                dateRangeText.textContent = `Tanggal: ${prettyDate}`;
+            } else {
+                subtitle.textContent = `Seluruh data transaksi`;
+                dateRangeText.textContent = `Semua Tanggal Transaksi`;
+            }
 
+            // Hitung Total (hanya yang difilter)
+            let sumCair = 0, sumHpp = 0, sumProfit = 0;
+            const tbody = document.getElementById('pdfTableBody');
+            tbody.innerHTML = '';
+
+            currentFilteredData.forEach(item => {
+                sumCair += item.nominalCair;
+                sumHpp += item.hppProduk;
+                sumProfit += item.hasilSelisih;
+
+                let displayDate = item.tanggalInput || '-';
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${displayDate}</td>
+                    <td>${escapeHtml(item.namaAkun || '-')}</td>
+                    <td><b>${escapeHtml(item.noPesanan)}</b></td>
+                    <td>${escapeHtml(item.namaProduk)} (x${item.qty})</td>
+                    <td>Rp ${item.nominalCair.toLocaleString('id-ID')}</td>
+                    <td style="color:#e11d48">Rp ${item.hppProduk.toLocaleString('id-ID')}</td>
+                    <td style="font-weight:bold; color:${item.hasilSelisih >= 0 ? '#059669' : '#e11d48'}">Rp ${item.hasilSelisih.toLocaleString('id-ID')}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Update Angka Total di Header PDF
+            document.getElementById('pdfTotalCair').textContent = 'Rp ' + sumCair.toLocaleString('id-ID');
+            document.getElementById('pdfTotalHpp').textContent = 'Rp ' + sumHpp.toLocaleString('id-ID');
+            document.getElementById('pdfTotalProfit').textContent = 'Rp ' + sumProfit.toLocaleString('id-ID');
+            
+            // Set Tanggal Cetak
+            const now = new Date();
+            document.getElementById('pdfPrintDate').textContent = now.toLocaleString('id-ID');
+
+            document.getElementById('pdfPreviewModal').classList.remove('hidden');
+        }
+
+        window.closePdfPreviewModal = function() {
+            document.getElementById('pdfPreviewModal').classList.add('hidden');
+        }
+
+        window.downloadPDF = function() {
+            const element = document.getElementById('pdfPrintArea');
+            const dateFilter = document.getElementById('filterTanggal').value;
+            const fileName = dateFilter ? `Laporan_Profit_${dateFilter}.pdf` : `Laporan_Profit_Semua.pdf`;
+            
+            // Konfigurasi html2pdf
+            var opt = {
+                margin:       10,
+                filename:     fileName,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2 },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' } // Landscape karena kolomnya banyak
+            };
+
+            // Tampilkan Loading (opsional karena ini cepat)
+            showLoading('Mengekspor PDF...');
+            
+            html2pdf().set(opt).from(element).save().then(() => {
+                hideLoading();
+                showAlert('PDF berhasil diunduh!', 'success');
+            }).catch(err => {
+                hideLoading();
+                showAlert('Gagal membuat PDF', 'error');
+                console.error(err);
+            });
+        }
+
+        // ==========================================
+        // UI & UTILITIES
+        // ==========================================
         window.openSyncModal = function() { document.getElementById('syncModal').classList.remove('hidden'); }
         window.closeSyncModal = function() { document.getElementById('syncModal').classList.add('hidden'); }
         
         window.saveWebhook = function() {
             webhookEndpoint = document.getElementById('webhookUrl').value.trim();
-            // Simpan Permanen ke Browser
-            localStorage.setItem('app_sales_margin_webhook', webhookEndpoint);
+            localStorage.setItem('app_sales_margin_webhook', webhookEndpoint); // Simpan Permanen
             
             document.getElementById('webhookSavedMsg').classList.remove('hidden');
-            showAlert('Konfigurasi webhook berhasil disimpan secara permanen!', 'success');
+            showAlert('Konfigurasi webhook tersimpan!', 'success');
             setTimeout(() => { closeSyncModal(); }, 1000);
         }
 
