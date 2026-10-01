@@ -1,4 +1,5 @@
-const CACHE_NAME = "salesprofit-pwa-v6";
+const CACHE_NAME = "salesprofit-pwa-v8";
+
 const urlsToCache = [
   "./",
   "./index.html",
@@ -13,6 +14,26 @@ self.addEventListener("install", event => {
         return cache.addAll(urlsToCache);
       })
   );
+  // Memaksa SW baru untuk segera aktif
+  self.skipWaiting();
+});
+
+// Aktivasi & Hapus Cache Lama
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('Menghapus cache lama:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+  // Memastikan semua tab yang terbuka menggunakan SW baru
+  self.clients.claim();
 });
 
 // Fetch dari Cache atau Jaringan
