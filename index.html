@@ -54,7 +54,9 @@
 
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
+        <!-- BAGIAN TAB: PENJUALAN -->
         <div id="tabPenjualan" class="block">
+            <!-- Statistik Dashboard -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                     <div>
@@ -85,6 +87,7 @@
                 </div>
             </div>
             
+            <!-- Notifikasi Box -->
             <div id="alertBox" class="hidden mb-6 p-4 rounded-xl border flex items-center justify-between transition-all">
                 <div class="flex items-center space-x-3">
                     <i id="alertIcon" class="fa-solid text-lg"></i>
@@ -338,8 +341,7 @@
         </div>
     </div>
 
-    <!-- SCRIPT PWA & FIREBASE -->
-    <script type="module">
+    <script>
         // Registrasi Service Worker untuk PWA
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -349,25 +351,14 @@
             });
         }
 
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        
-        let userId = null;
+        // State Aplikasi (Tersimpan di RAM)
         let dataList = [];
         let webhookEndpoint = ''; 
         let katalogProduk = [];
 
-        window.onload = async function() {
-            // MUAT WEBHOOK DARI LOCAL STORAGE (MEMORI PERANGKAT)
+        // Inisialisasi Saat Halaman Dimuat
+        window.onload = function() {
+            // Muat Webhook dari Local Storage
             const savedWebhook = localStorage.getItem('app_sales_margin_webhook');
             if(savedWebhook) {
                 webhookEndpoint = savedWebhook;
@@ -377,21 +368,37 @@
 
             document.getElementById('tanggalInput').value = new Date().toISOString().split('T')[0];
             
-            try {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                userId = auth.currentUser.uid;
-                loadProductsData();
-                loadFirestoreData();
-            } catch (error) {
-                console.error("Auth error:", error);
-                showAlert("Gagal terhubung ke cloud storage.", "error");
-            }
+            // Memuat Data Produk & Transaksi dari Memori HP (LocalStorage)
+            loadLocalData();
         };
 
+        // Fungsi Simpan dan Muat ke LocalStorage (Pengganti Database Cloud)
+        function loadLocalData() {
+            try {
+                const storedProduk = localStorage.getItem('salesprofit_katalog');
+                if (storedProduk) katalogProduk = JSON.parse(storedProduk);
+                
+                const storedTransaksi = localStorage.getItem('salesprofit_transaksi');
+                if (storedTransaksi) dataList = JSON.parse(storedTransaksi);
+                
+                // Pastikan terurut dari terbaru
+                dataList.sort((a, b) => (b.timestampMs || 0) - (a.timestampMs || 0));
+            } catch(e) {
+                console.error("Gagal membaca memori lokal", e);
+                katalogProduk = []; dataList = [];
+            }
+            
+            renderProductTable();
+            initDropdownProduk();
+            applyFilters();
+        }
+
+        function saveLocalData() {
+            localStorage.setItem('salesprofit_katalog', JSON.stringify(katalogProduk));
+            localStorage.setItem('salesprofit_transaksi', JSON.stringify(dataList));
+        }
+
+        // Fungsi Pindah Tab
         window.switchTab = function(tabName) {
             const tabPenjualan = document.getElementById('tabPenjualan');
             const tabProduk = document.getElementById('tabProduk');
@@ -421,80 +428,50 @@
             }
         }
 
-        function loadProductsData() {
-            if (!userId) return;
-            const colRef = collection(db, 'artifacts', appId, 'users', userId, 'products');
-            onSnapshot(colRef, (snapshot) => {
-                katalogProduk = [];
-                snapshot.forEach(docSnap => {
-                    katalogProduk.push({ id: docSnap.id, ...docSnap.data() });
-                });
-                katalogProduk.sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0));
-                renderProductTable();
-                initDropdownProduk();
-            });
-        }
-
         window.handleProductSubmit = async function(e) {
             e.preventDefault();
-            if (!userId) return;
 
             const editId = document.getElementById('editProdukId').value;
             const nama = document.getElementById('namaProdukBaru').value.trim();
             const hpp = parseRupiahToNumber(document.getElementById('hppProdukBaru').value);
-            const newId = editId ? editId : 'PROD-' + Date.now();
             
             let oldNama = '';
+            
             if (editId) {
-                const oldProd = katalogProduk.find(p => p.id === editId);
-                if (oldProd) oldNama = oldProd.nama;
-            }
-
-            try {
-                await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'products', newId), { nama: nama, hpp: hpp, timestampMs: Date.now() }, {merge: true});
-                
-                if (editId && oldNama) {
-                    const promises = [];
-                    const itemsToUpdateWebhook = [];
+                // Mode Edit Produk
+                const index = katalogProduk.findIndex(p => p.id === editId);
+                if(index > -1) {
+                    oldNama = katalogProduk[index].nama;
+                    katalogProduk[index].nama = nama;
+                    katalogProduk[index].hpp = hpp;
                     
+                    // Update transaksi terkait
+                    let transaksiDiubah = 0;
                     dataList.forEach(item => {
                         if (item.namaProduk === oldNama) {
-                            const newTotalHpp = hpp * (item.qty || 1);
-                            const newSelisih = item.nominalCair - newTotalHpp;
+                            item.namaProduk = nama;
+                            item.hppProduk = hpp * (item.qty || 1);
+                            item.hasilSelisih = item.nominalCair - item.hppProduk;
+                            transaksiDiubah++;
                             
-                            const updatedData = {
-                                namaProduk: nama, 
-                                hppProduk: newTotalHpp,
-                                hasilSelisih: newSelisih
-                            };
-                            
-                            promises.push(
-                                setDoc(doc(db, 'artifacts', appId, 'users', userId, 'sales_data', item.id), updatedData, { merge: true })
-                            );
-                            
-                            itemsToUpdateWebhook.push({...item, ...updatedData});
+                            // Kirim update ke Google Sheets secara background
+                            if (webhookEndpoint) sendToGoogleSheets(item);
                         }
                     });
-
-                    if (promises.length > 0) {
-                        await Promise.all(promises);
-                        if (webhookEndpoint) {
-                            for (const item of itemsToUpdateWebhook) {
-                                await sendToGoogleSheets(item);
-                            }
-                        }
-                        showAlert(`Produk diperbarui & ${promises.length} transaksi disesuaikan!`, 'success');
-                    } else {
-                        showAlert('Produk berhasil diperbarui!', 'success');
-                    }
-                } else {
-                    showAlert('Produk ditambahkan!', 'success');
+                    
+                    showAlert(`Produk diperbarui & ${transaksiDiubah} transaksi terkait telah disesuaikan!`, 'success');
                 }
-                
-                cancelEditProduct();
-            } catch (err) {
-                showAlert('Gagal menyimpan produk.', 'error');
+            } else {
+                // Mode Tambah Produk Baru
+                const newId = 'PROD-' + Date.now();
+                katalogProduk.push({ id: newId, nama: nama, hpp: hpp, timestampMs: Date.now() });
+                showAlert('Produk baru berhasil ditambahkan!', 'success');
             }
+            
+            saveLocalData(); // Simpan ke Memori HP
+            renderProductTable();
+            initDropdownProduk();
+            cancelEditProduct();
         }
 
         window.editProduct = function(id) {
@@ -540,13 +517,12 @@
             });
         }
 
-        window.deleteProduct = async function(id) {
-            if (!userId) return;
-            try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'products', id));
-                updateHppOtomatis();
-                showAlert('Produk dihapus.', 'info');
-            } catch (error) {}
+        window.deleteProduct = function(id) {
+            katalogProduk = katalogProduk.filter(p => p.id !== id);
+            saveLocalData();
+            renderProductTable();
+            initDropdownProduk();
+            showAlert('Produk dihapus dari memori.', 'info');
         }
         
         function initDropdownProduk() {
@@ -561,19 +537,6 @@
             });
             if (katalogProduk.find(p => p.id === currentValue)) select.value = currentValue;
             else updateHppOtomatis();
-        }
-
-        function loadFirestoreData() {
-            if (!userId) return;
-            const colRef = collection(db, 'artifacts', appId, 'users', userId, 'sales_data');
-            onSnapshot(colRef, (snapshot) => {
-                dataList = [];
-                snapshot.forEach(docSnap => {
-                    dataList.push({ id: docSnap.id, ...docSnap.data() });
-                });
-                dataList.sort((a, b) => (b.timestampMs || 0) - (a.timestampMs || 0));
-                applyFilters();
-            });
         }
 
         window.updateHppOtomatis = function() {
@@ -601,7 +564,6 @@
 
         window.handleFormSubmit = async function(e) {
             e.preventDefault();
-            if (!userId) return;
 
             const tanggalInput = document.getElementById('tanggalInput').value;
             const namaAkunRaw = document.getElementById('namaAkun').value.trim();
@@ -614,6 +576,7 @@
             const newId = 'ORD-' + noPesananRaw.replace(/[^a-zA-Z0-9]/g, '');
 
             const newItem = {
+                id: newId,
                 timestampMs: Date.now(),
                 timestamp: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
                 tanggalInput: tanggalInput,
@@ -627,6 +590,12 @@
                 catatan: document.getElementById('catatan').value.trim()
             };
 
+            // Tambahkan ke array dan simpan
+            dataList.unshift(newItem); // Taruh paling atas
+            saveLocalData();
+            applyFilters(); // Render ulang tabel dan statistik
+
+            // Reset form sebagian
             document.getElementById('namaAkun').value = '';
             document.getElementById('noPesanan').value = '';
             document.getElementById('nominalCair').value = '';
@@ -635,12 +604,11 @@
             document.getElementById('qtyPesanan').value = '1';
             document.getElementById('hppProduk').value = '';
             
-            try {
-                await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'sales_data', newId), newItem);
-                if (webhookEndpoint) await sendToGoogleSheets(newItem);
-                showAlert('Transaksi berhasil disimpan!', 'success');
-            } catch (error) {
-                showAlert('Gagal menyimpan transaksi.', 'error');
+            showAlert('Transaksi berhasil disimpan ke memori HP!', 'success');
+            
+            // Kirim ke Sheets di latar belakang
+            if (webhookEndpoint) {
+                sendToGoogleSheets(newItem);
             }
         }
 
@@ -723,23 +691,21 @@
             applyFilters();
         }
 
-        window.deleteItem = async function(id) {
-            if (!userId) return;
-            try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'sales_data', id));
-                showAlert('Data transaksi dihapus.', 'info');
-            } catch (error) {}
+        window.deleteItem = function(id) {
+            dataList = dataList.filter(d => d.id !== id);
+            saveLocalData();
+            applyFilters();
+            showAlert('Data transaksi dihapus dari memori HP.', 'info');
         }
 
-        window.clearAllData = async function() {
-            if (dataList.length === 0 || !userId) return;
-            try {
-                const snapshot = await getDocs(collection(db, 'artifacts', appId, 'users', userId, 'sales_data'));
-                const promises = [];
-                snapshot.forEach(docSnap => promises.push(deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'sales_data', docSnap.id))));
-                await Promise.all(promises);
-                showAlert('Semua data dibersihkan.', 'info');
-            } catch (error) {}
+        window.clearAllData = function() {
+            if (dataList.length === 0) return;
+            if(confirm("Yakin ingin menghapus seluruh riwayat pesanan dari HP ini? (Data di Google Sheets Anda tidak akan terhapus)")) {
+                dataList = [];
+                saveLocalData();
+                applyFilters();
+                showAlert('Semua riwayat dibersihkan dari layar.', 'info');
+            }
         }
 
         window.exportToCSV = function() {
@@ -780,11 +746,13 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(item)
                 });
-            } catch (err) {}
+            } catch (err) {
+                console.error("Gagal mengirim ke Sheets di latar", err);
+            }
         }
 
         window.importFromGoogleSheets = async function() {
-            if (!webhookEndpoint || !userId) {
+            if (!webhookEndpoint) {
                 showAlert('Harap simpan URL Webhook yang valid terlebih dahulu!', 'error');
                 return;
             }
@@ -800,6 +768,8 @@
                     let successCount = 0;
                     let restoredProductCount = 0;
                     
+                    let newDataList = []; // Siapkan memori baru untuk menampung
+                    
                     for (const item of importedData) {
                         if (!item.noPesanan) continue;
                         
@@ -809,7 +779,8 @@
                         const qty = Number(item.qty) || 1;
                         
                         const newItem = {
-                            timestampMs: Date.now(),
+                            id: docId,
+                            timestampMs: Date.now() - successCount, // buat beda sedikit untuk sorting
                             timestamp: item.timestamp || '-',
                             tanggalInput: item.tanggalInput || '-',
                             namaAkun: item.namaAkun || '-',
@@ -822,24 +793,26 @@
                             catatan: item.catatan || ''
                         };
 
-                        const docRef = doc(db, 'artifacts', appId, 'users', userId, 'sales_data', docId);
-                        await setDoc(docRef, newItem);
+                        newDataList.push(newItem);
                         successCount++;
 
+                        // Pemulihan Master Produk Otomatis
                         if (item.namaProduk && item.namaProduk !== '-' && hppProduk > 0) {
                             const isExist = katalogProduk.some(p => p.nama.trim().toLowerCase() === String(item.namaProduk).trim().toLowerCase());
                             
                             if (!isExist) {
                                 const newProdId = 'PROD-RESTORE-' + Math.random().toString(36).substr(2, 9);
                                 const baseHpp = hppProduk / qty;
-                                const newProduct = { nama: item.namaProduk, hpp: baseHpp, timestampMs: Date.now() };
-                                
-                                await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'products', newProdId), newProduct);
-                                katalogProduk.push({ id: newProdId, ...newProduct });
+                                katalogProduk.push({ id: newProdId, nama: item.namaProduk, hpp: baseHpp, timestampMs: Date.now() });
                                 restoredProductCount++;
                             }
                         }
                     }
+                    
+                    // Timpa memori HP dengan data terbaru dari Sheets
+                    dataList = newDataList;
+                    saveLocalData();
+                    loadLocalData(); // Refresh UI
                     
                     showAlert(`Berhasil memuat ${successCount} transaksi & memulihkan ${restoredProductCount} master produk!`, 'success');
                 } else {
@@ -847,7 +820,7 @@
                 }
             } catch (error) {
                 console.error(error);
-                showAlert('Gagal menarik data. Pastikan Webhook valid.', 'error');
+                showAlert('Gagal menarik data. Pastikan Webhook URL Anda benar.', 'error');
             }
         }
 
@@ -856,16 +829,12 @@
         
         window.saveWebhook = function() {
             webhookEndpoint = document.getElementById('webhookUrl').value.trim();
-            // SIMPAN KE LOCAL STORAGE
+            // Simpan Permanen ke Browser
             localStorage.setItem('app_sales_margin_webhook', webhookEndpoint);
             
             document.getElementById('webhookSavedMsg').classList.remove('hidden');
             showAlert('Konfigurasi webhook berhasil disimpan secara permanen!', 'success');
-            
-            // Opsional: Langsung tutup modal setelah simpan
-            setTimeout(() => {
-                closeSyncModal();
-            }, 1000);
+            setTimeout(() => { closeSyncModal(); }, 1000);
         }
 
         window.showAlert = function(message, type) {
@@ -876,6 +845,7 @@
             box.classList.remove('hidden');
             setTimeout(() => box.classList.add('hidden'), 5000);
         }
+        
         window.closeAlert = function() { document.getElementById('alertBox').classList.add('hidden'); }
         function escapeHtml(str) { return String(str||'').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
     </script>
