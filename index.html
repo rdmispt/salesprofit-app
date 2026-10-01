@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pencatatan Penjualan & Selisih HPP</title>
+    
+    <!-- Konfigurasi PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135679.png">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Inter & FontAwesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 text-white p-2.5 rounded-xl shadow-md">
+                    <i class="fa-solid fa-calculator text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg text-slate-900 leading-tight">SalesProfit Sheets</h1>
+                    <p class="text-xs text-slate-500">Nomor Pesanan, Nominal Cair, HPP & Hasil Selisih</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button onclick="openSyncModal()" class="inline-flex items-center space-x-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-semibold px-4 py-2 rounded-xl border border-indigo-200 transition">
+                    <i class="fa-solid fa-rotate"></i>
+                    <span class="hidden sm:inline">Pusat Sinkronisasi</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 sticky top-16 z-20">
+        <div class="max-w-7xl mx-auto flex space-x-8">
+            <button onclick="switchTab('penjualan')" id="btnTabPenjualan" class="py-4 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 transition">
+                <i class="fa-solid fa-chart-pie mr-2"></i>Penjualan & Dashboard
+            </button>
+            <button onclick="switchTab('produk')" id="btnTabProduk" class="py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300 transition">
+                <i class="fa-solid fa-box-open mr-2"></i>Master Data Produk (HPP)
+            </button>
+        </div>
+    </div>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <div id="tabPenjualan" class="block">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Nominal Cair</p>
+                        <h3 id="statNominalCair" class="text-2xl font-bold text-slate-800 mt-1">Rp 0</h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-wallet"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total HPP Dikeluarkan</p>
+                        <h3 id="statHpp" class="text-2xl font-bold text-rose-600 mt-1">Rp 0</h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-box-archive"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Hasil Selisih</p>
+                        <h3 id="statProfit" class="text-2xl font-bold text-emerald-600 mt-1">Rp 0</h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="alertBox" class="hidden mb-6 p-4 rounded-xl border flex items-center justify-between transition-all">
+                <div class="flex items-center space-x-3">
+                    <i id="alertIcon" class="fa-solid text-lg"></i>
+                    <span id="alertText" class="text-sm font-medium"></span>
+                </div>
+                <button onclick="closeAlert()" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="tabPenjualanContent" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                <div class="lg:col-span-1">
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sticky top-24">
+                        <h2 class="text-base font-bold text-slate-900 mb-4 flex items-center space-x-2">
+                            <i class="fa-solid fa-file-pen text-indigo-600"></i>
+                            <span>Input Data Penjualan</span>
+                        </h2>
+                        
+                        <form id="dataForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Tanggal Transaksi</label>
+                                <input type="date" id="tanggalInput" required
+                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Nama Akun</label>
+                                <input type="text" id="namaAkun" required placeholder="Contoh: Akun Utama / Toko 1" 
+                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Nomor Pesanan</label>
+                                <input type="text" id="noPesanan" required placeholder="Contoh: INV-2026-001" 
+                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Jumlah Nominal yang Cair (Rp)</label>
+                                <input type="text" id="nominalCair" required placeholder="Contoh: 500.000" oninput="formatRupiahInput(this)" 
+                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition">
+                            </div>
+
+                            <div class="grid grid-cols-4 gap-3">
+                                <div class="col-span-3">
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Pilih Produk</label>
+                                    <select id="pilihProduk" required onchange="updateHppOtomatis()"
+                                        class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition bg-white">
+                                        <option value="">-- Pilih Produk --</option>
+                                    </select>
+                                </div>
+                                <div class="col-span-1">
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Jumlah (X)</label>
+                                    <input type="number" id="qtyPesanan" required min="1" value="1" oninput="updateHppOtomatis()"
+                                        class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition text-center">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Total HPP Produk (Otomatis)</label>
+                                <input type="text" id="hppProduk" readonly placeholder="Total HPP otomatis" 
+                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-sm outline-none cursor-not-allowed">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Catatan Tambahan (Opsional)</label>
+                                <textarea id="catatan" rows="2" placeholder="Keterangan transaksi..." 
+                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition"></textarea>
+                            </div>
+
+                            <div class="pt-2">
+                                <button type="submit" 
+                                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center space-x-2">
+                                    <i class="fa-solid fa-calculator"></i>
+                                    <span>Hitung & Simpan Transaksi</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                            <div>
+                                <h2 class="text-base font-bold text-slate-900">Riwayat Hasil Selisih Transaksi</h2>
+                                <p class="text-xs text-slate-500">Nomor Pesanan, Nominal Cair dikurangi HPP Produk.</p>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="exportToCSV()" class="inline-flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition border border-slate-200">
+                                    <i class="fa-solid fa-download text-indigo-600"></i>
+                                    <span>Download CSV</span>
+                                </button>
+                                <button onclick="clearAllData()" class="inline-flex items-center space-x-1 bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs px-3 py-2 rounded-xl transition border border-red-200" title="Hapus Semua">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-4 flex flex-col sm:flex-row items-center gap-4">
+                            <div class="relative flex-1 w-full">
+                                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                    <i class="fa-solid fa-search"></i>
+                                </span>
+                                <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Cari nomor pesanan atau nama akun..." 
+                                    class="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div class="flex items-center space-x-2 w-full sm:w-auto">
+                                <label class="text-xs font-semibold text-slate-500 hidden sm:block">Filter Tanggal:</label>
+                                <input type="date" id="filterTanggal" onchange="applyFilters()"
+                                    class="px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full sm:w-auto">
+                                <button onclick="clearDateFilter()" class="text-slate-400 hover:text-red-500 transition px-2" title="Hapus Filter Tanggal">
+                                    <i class="fa-solid fa-xmark text-lg"></i>
+                                </button>
+                            </div>
+                            <div class="text-xs text-slate-500 font-medium whitespace-nowrap self-start sm:self-center">
+                                Total: <span id="totalCount" class="font-bold text-slate-800">0</span> Transaksi
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-xl border border-slate-100">
+                            <table id="dataTable" class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 text-slate-600 text-xs font-bold uppercase tracking-wider border-b border-slate-200">
+                                        <th class="py-3 px-3">Nama Akun</th>
+                                        <th class="py-3 px-3">No. Pesanan & Produk</th>
+                                        <th class="py-3 px-3">Nominal Cair</th>
+                                        <th class="py-3 px-3">HPP Produk</th>
+                                        <th class="py-3 px-3">Hasil Selisih</th>
+                                        <th class="py-3 px-2 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBody" class="divide-y divide-slate-100 text-sm">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="emptyState" class="hidden py-12 text-center">
+                            <div class="text-slate-300 text-4xl mb-2"><i class="fa-solid fa-receipt"></i></div>
+                            <p class="text-sm font-medium text-slate-500">Belum ada data pesanan yang dimasukkan.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tabProduk" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-1">
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sticky top-32">
+                        <h2 id="formTitleProduk" class="text-base font-bold text-slate-900 mb-4 flex items-center space-x-2">
+                            <i class="fa-solid fa-folder-plus text-indigo-600"></i>
+                            <span>Tambah Produk Baru</span>
+                        </h2>
+                        
+                        <form id="formProduk" onsubmit="handleProductSubmit(event)" class="space-y-4">
+                            <input type="hidden" id="editProdukId" value="">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Nama Produk / Layanan</label>
+                                <input type="text" id="namaProdukBaru" required placeholder="Contoh: Paket Premium" 
+                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Nilai HPP (Rp)</label>
+                                <input type="text" id="hppProdukBaru" required placeholder="Contoh: 150.000" oninput="formatRupiahInput(this)" 
+                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm outline-none transition">
+                            </div>
+
+                            <div class="pt-2 flex space-x-3">
+                                <button type="submit" id="btnSubmitProduk" 
+                                    class="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center space-x-2">
+                                    <i class="fa-solid fa-save"></i>
+                                    <span>Simpan Produk</span>
+                                </button>
+                                <button type="button" id="btnCancelEdit" onclick="cancelEditProduct()"
+                                    class="hidden bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-3 px-4 rounded-xl border border-slate-200 transition">
+                                    Batal
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                        <div class="mb-6">
+                            <h2 class="text-base font-bold text-slate-900">Daftar Master Produk</h2>
+                            <p class="text-xs text-slate-500">Data ini akan muncul di pilihan dropdown pada form penjualan.</p>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-xl border border-slate-100">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 text-slate-600 text-xs font-bold uppercase tracking-wider border-b border-slate-200">
+                                        <th class="py-3 px-4">Nama Produk</th>
+                                        <th class="py-3 px-4">Nilai HPP</th>
+                                        <th class="py-3 px-3 text-center w-24">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBodyProduk" class="divide-y divide-slate-100 text-sm">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="emptyStateProduk" class="hidden py-8 text-center">
+                            <div class="text-slate-300 text-3xl mb-2"><i class="fa-solid fa-box-open"></i></div>
+                            <p class="text-sm font-medium text-slate-500">Belum ada master data produk.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="syncModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm hidden">
+        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 overflow-hidden border border-slate-200">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <h3 class="font-bold text-slate-900 flex items-center space-x-2">
+                    <i class="fa-brands fa-google-drive text-indigo-600"></i>
+                    <span>Pusat Sinkronisasi Google Sheets</span>
+                </h3>
+                <button onclick="closeSyncModal()" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 space-y-5">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">URL Webhook / Google Apps Script API</label>
+                    <input type="text" id="webhookUrl" placeholder="https://script.google.com/macros/s/.../exec" 
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 text-sm outline-none">
+                    <p class="text-[10px] text-emerald-600 mt-1 font-medium hidden" id="webhookSavedMsg"><i class="fa-solid fa-check-circle mr-1"></i>Tersimpan di memori perangkat</p>
+                </div>
+                
+                <div class="bg-indigo-50 rounded-xl p-4 border border-indigo-100 flex items-start space-x-3">
+                    <div class="text-indigo-600 mt-0.5"><i class="fa-solid fa-cloud-arrow-down text-xl"></i></div>
+                    <div>
+                        <h4 class="text-sm font-bold text-indigo-900 mb-1">Tarik & Pulihkan Data dari Sheets</h4>
+                        <p class="text-xs text-indigo-800 mb-3">Sistem pintar ini akan menarik semua riwayat transaksi dari Google Sheets, <b>sekaligus otomatis membuat ulang Master Data Produk</b> berdasarkan riwayat tersebut jika hilang.</p>
+                        <button onclick="importFromGoogleSheets()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2 px-4 rounded-lg shadow-sm transition inline-flex items-center">
+                            <i class="fa-solid fa-download mr-2"></i> Mulai Tarik Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end space-x-3">
+                <button onclick="closeSyncModal()" class="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-200 transition">Tutup</button>
+                <button onclick="saveWebhook()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-900 text-white transition shadow-sm">Simpan Konfigurasi Webhook</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT PWA & FIREBASE -->
+    <script type="module">
+        // Registrasi Service Worker untuk PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(registration => console.log('ServiceWorker registered'))
+                    .catch(err => console.log('ServiceWorker registration failed: ', err));
+            });
+        }
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        let userId = null;
+        let dataList = [];
+        let webhookEndpoint = ''; 
+        let katalogProduk = [];
+
+        window.onload = async function() {
+            // MUAT WEBHOOK DARI LOCAL STORAGE (MEMORI PERANGKAT)
+            const savedWebhook = localStorage.getItem('app_sales_margin_webhook');
+            if(savedWebhook) {
+                webhookEndpoint = savedWebhook;
+                document.getElementById('webhookUrl').value = savedWebhook;
+                document.getElementById('webhookSavedMsg').classList.remove('hidden');
+            }
+
+            document.getElementById('tanggalInput').value = new Date().toISOString().split('T')[0];
+            
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser.uid;
+                loadProductsData();
+                loadFirestoreData();
+            } catch (error) {
+                console.error("Auth error:", error);
+                showAlert("Gagal terhubung ke cloud storage.", "error");
+            }
+        };
+
+        window.switchTab = function(tabName) {
+            const tabPenjualan = document.getElementById('tabPenjualan');
+            const tabProduk = document.getElementById('tabProduk');
+            const btnPenjualan = document.getElementById('btnTabPenjualan');
+            const btnProduk = document.getElementById('btnTabProduk');
+
+            if (tabName === 'penjualan') {
+                tabPenjualan.classList.remove('hidden');
+                tabPenjualan.classList.add('block');
+                tabProduk.classList.remove('block');
+                tabProduk.classList.add('hidden');
+                
+                btnPenjualan.className = "py-4 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 transition";
+                btnPenjualan.innerHTML = '<i class="fa-solid fa-chart-pie mr-2"></i>Penjualan & Dashboard';
+                btnProduk.className = "py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300 transition";
+                btnProduk.innerHTML = '<i class="fa-solid fa-box-open mr-2"></i>Master Data Produk (HPP)';
+            } else {
+                tabPenjualan.classList.remove('block');
+                tabPenjualan.classList.add('hidden');
+                tabProduk.classList.remove('hidden');
+                tabProduk.classList.add('block');
+
+                btnProduk.className = "py-4 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 transition";
+                btnProduk.innerHTML = '<i class="fa-solid fa-box-open mr-2"></i>Master Data Produk (HPP)';
+                btnPenjualan.className = "py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300 transition";
+                btnPenjualan.innerHTML = '<i class="fa-solid fa-chart-pie mr-2"></i>Penjualan & Dashboard';
+            }
+        }
+
+        function loadProductsData() {
+            if (!userId) return;
+            const colRef = collection(db, 'artifacts', appId, 'users', userId, 'products');
+            onSnapshot(colRef, (snapshot) => {
+                katalogProduk = [];
+                snapshot.forEach(docSnap => {
+                    katalogProduk.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                katalogProduk.sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0));
+                renderProductTable();
+                initDropdownProduk();
+            });
+        }
+
+        window.handleProductSubmit = async function(e) {
+            e.preventDefault();
+            if (!userId) return;
+
+            const editId = document.getElementById('editProdukId').value;
+            const nama = document.getElementById('namaProdukBaru').value.trim();
+            const hpp = parseRupiahToNumber(document.getElementById('hppProdukBaru').value);
+            const newId = editId ? editId : 'PROD-' + Date.now();
+            
+            let oldNama = '';
+            if (editId) {
+                const oldProd = katalogProduk.find(p => p.id === editId);
+                if (oldProd) oldNama = oldProd.nama;
+            }
+
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'products', newId), { nama: nama, hpp: hpp, timestampMs: Date.now() }, {merge: true});
+                
+                if (editId && oldNama) {
+                    const promises = [];
+                    const itemsToUpdateWebhook = [];
+                    
+                    dataList.forEach(item => {
+                        if (item.namaProduk === oldNama) {
+                            const newTotalHpp = hpp * (item.qty || 1);
+                            const newSelisih = item.nominalCair - newTotalHpp;
+                            
+                            const updatedData = {
+                                namaProduk: nama, 
+                                hppProduk: newTotalHpp,
+                                hasilSelisih: newSelisih
+                            };
+                            
+                            promises.push(
+                                setDoc(doc(db, 'artifacts', appId, 'users', userId, 'sales_data', item.id), updatedData, { merge: true })
+                            );
+                            
+                            itemsToUpdateWebhook.push({...item, ...updatedData});
+                        }
+                    });
+
+                    if (promises.length > 0) {
+                        await Promise.all(promises);
+                        if (webhookEndpoint) {
+                            for (const item of itemsToUpdateWebhook) {
+                                await sendToGoogleSheets(item);
+                            }
+                        }
+                        showAlert(`Produk diperbarui & ${promises.length} transaksi disesuaikan!`, 'success');
+                    } else {
+                        showAlert('Produk berhasil diperbarui!', 'success');
+                    }
+                } else {
+                    showAlert('Produk ditambahkan!', 'success');
+                }
+                
+                cancelEditProduct();
+            } catch (err) {
+                showAlert('Gagal menyimpan produk.', 'error');
+            }
+        }
+
+        window.editProduct = function(id) {
+            const produk = katalogProduk.find(p => p.id === id);
+            if (!produk) return;
+            
+            document.getElementById('editProdukId').value = produk.id;
+            document.getElementById('namaProdukBaru').value = produk.nama;
+            document.getElementById('hppProdukBaru').value = produk.hpp.toLocaleString('id-ID');
+            
+            document.getElementById('formTitleProduk').innerHTML = '<i class="fa-solid fa-pen-to-square text-indigo-600"></i><span>Edit Data Produk</span>';
+            document.getElementById('btnSubmitProduk').innerHTML = '<i class="fa-solid fa-save"></i><span>Update Produk</span>';
+            document.getElementById('btnCancelEdit').classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        window.cancelEditProduct = function() {
+            document.getElementById('editProdukId').value = '';
+            document.getElementById('formProduk').reset();
+            
+            document.getElementById('formTitleProduk').innerHTML = '<i class="fa-solid fa-folder-plus text-indigo-600"></i><span>Tambah Produk Baru</span>';
+            document.getElementById('btnSubmitProduk').innerHTML = '<i class="fa-solid fa-save"></i><span>Simpan Produk</span>';
+            document.getElementById('btnCancelEdit').classList.add('hidden');
+        }
+
+        function renderProductTable() {
+            const tbody = document.getElementById('tableBodyProduk');
+            tbody.innerHTML = '';
+            document.getElementById('emptyStateProduk').classList.toggle('hidden', katalogProduk.length > 0);
+
+            katalogProduk.forEach((item) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-semibold text-slate-800">${escapeHtml(item.nama)}</td>
+                    <td class="py-3 px-4 text-rose-600 font-medium">Rp ${item.hpp.toLocaleString('id-ID')}</td>
+                    <td class="py-3 px-3 text-center space-x-2">
+                        <button onclick="editProduct('${item.id}')" class="text-slate-400 hover:text-indigo-600 transition" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteProduct('${item.id}')" class="text-slate-400 hover:text-red-600 transition" title="Hapus"><i class="fa-solid fa-trash-can"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        window.deleteProduct = async function(id) {
+            if (!userId) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'products', id));
+                updateHppOtomatis();
+                showAlert('Produk dihapus.', 'info');
+            } catch (error) {}
+        }
+        
+        function initDropdownProduk() {
+            const select = document.getElementById('pilihProduk');
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">-- Pilih Produk --</option>';
+            katalogProduk.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = `${p.nama} (HPP: Rp ${p.hpp.toLocaleString('id-ID')})`;
+                select.appendChild(opt);
+            });
+            if (katalogProduk.find(p => p.id === currentValue)) select.value = currentValue;
+            else updateHppOtomatis();
+        }
+
+        function loadFirestoreData() {
+            if (!userId) return;
+            const colRef = collection(db, 'artifacts', appId, 'users', userId, 'sales_data');
+            onSnapshot(colRef, (snapshot) => {
+                dataList = [];
+                snapshot.forEach(docSnap => {
+                    dataList.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                dataList.sort((a, b) => (b.timestampMs || 0) - (a.timestampMs || 0));
+                applyFilters();
+            });
+        }
+
+        window.updateHppOtomatis = function() {
+            const selectedId = document.getElementById('pilihProduk').value;
+            const produk = katalogProduk.find(p => p.id === selectedId);
+            const qty = parseInt(document.getElementById('qtyPesanan').value) || 1;
+            const totalHpp = produk ? (produk.hpp * qty) : 0;
+            document.getElementById('hppProduk').value = totalHpp > 0 ? totalHpp.toLocaleString('id-ID') : '';
+        }
+
+        window.formatRupiahInput = function(input) {
+            let value = input.value.replace(/[^,\d]/g, '').toString();
+            let split = value.split(',');
+            let sisa = split[0].length % 3;
+            let rupiah = split[0].substr(0, sisa);
+            let ribuan = split[0].substr(sisa).match(/\d{3}/gi);
+            if (ribuan) rupiah += (sisa ? '.' : '') + ribuan.join('.');
+            input.value = split[1] !== undefined ? rupiah + ',' + split[1] : rupiah;
+        }
+
+        function parseRupiahToNumber(str) {
+            if (!str) return 0;
+            return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
+        }
+
+        window.handleFormSubmit = async function(e) {
+            e.preventDefault();
+            if (!userId) return;
+
+            const tanggalInput = document.getElementById('tanggalInput').value;
+            const namaAkunRaw = document.getElementById('namaAkun').value.trim();
+            const noPesananRaw = document.getElementById('noPesanan').value.trim();
+            const produk = katalogProduk.find(p => p.id === document.getElementById('pilihProduk').value);
+            const nominalCair = parseRupiahToNumber(document.getElementById('nominalCair').value);
+            const qty = parseInt(document.getElementById('qtyPesanan').value) || 1;
+            const hppProduk = produk ? (produk.hpp * qty) : 0;
+            
+            const newId = 'ORD-' + noPesananRaw.replace(/[^a-zA-Z0-9]/g, '');
+
+            const newItem = {
+                timestampMs: Date.now(),
+                timestamp: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
+                tanggalInput: tanggalInput,
+                namaAkun: namaAkunRaw,
+                noPesanan: noPesananRaw,
+                qty: qty,
+                namaProduk: produk ? produk.nama : '-',
+                nominalCair: nominalCair,
+                hppProduk: hppProduk,
+                hasilSelisih: nominalCair - hppProduk,
+                catatan: document.getElementById('catatan').value.trim()
+            };
+
+            document.getElementById('namaAkun').value = '';
+            document.getElementById('noPesanan').value = '';
+            document.getElementById('nominalCair').value = '';
+            document.getElementById('pilihProduk').value = '';
+            document.getElementById('catatan').value = '';
+            document.getElementById('qtyPesanan').value = '1';
+            document.getElementById('hppProduk').value = '';
+            
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'sales_data', newId), newItem);
+                if (webhookEndpoint) await sendToGoogleSheets(newItem);
+                showAlert('Transaksi berhasil disimpan!', 'success');
+            } catch (error) {
+                showAlert('Gagal menyimpan transaksi.', 'error');
+            }
+        }
+
+        function updateDashboardStats(filteredData) {
+            const data = filteredData || dataList;
+            let nominal = 0, hpp = 0, profit = 0;
+            data.forEach(item => { nominal += item.nominalCair; hpp += item.hppProduk; profit += item.hasilSelisih; });
+            document.getElementById('statNominalCair').textContent = 'Rp ' + nominal.toLocaleString('id-ID');
+            document.getElementById('statHpp').textContent = 'Rp ' + hpp.toLocaleString('id-ID');
+            document.getElementById('statProfit').textContent = 'Rp ' + profit.toLocaleString('id-ID');
+        }
+
+        function renderTable(filteredData) {
+            const data = filteredData || dataList;
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            document.getElementById('totalCount').textContent = data.length;
+            document.getElementById('emptyState').classList.toggle('hidden', data.length > 0);
+
+            data.forEach((item) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+                const profitColor = item.hasilSelisih >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50';
+
+                let displayDate = item.timestamp;
+                if (item.tanggalInput) {
+                    try {
+                        const dateObj = new Date(item.tanggalInput);
+                        displayDate = dateObj.toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'});
+                    } catch(e) {}
+                }
+
+                tr.innerHTML = `
+                    <td class="py-3 px-3 font-semibold text-slate-700 whitespace-nowrap">${escapeHtml(item.namaAkun || '-')}</td>
+                    <td class="py-3 px-3">
+                        <span class="font-bold text-slate-900 block">${escapeHtml(item.noPesanan)}</span>
+                        <span class="text-xs text-indigo-600 font-semibold block mt-0.5">${escapeHtml(item.namaProduk || '')} <span class="text-slate-400 ml-0.5">(x${item.qty || 1})</span></span>
+                        <span class="text-[10px] text-slate-400 block mt-0.5"><i class="fa-regular fa-calendar mr-1"></i> ${displayDate}</span>
+                        ${item.catatan ? `<span class="text-xs text-slate-500 italic block mt-0.5">${escapeHtml(item.catatan)}</span>` : ''}
+                    </td>
+                    <td class="py-3 px-3 text-slate-700 font-medium">Rp ${item.nominalCair.toLocaleString('id-ID')}</td>
+                    <td class="py-3 px-3 text-rose-600 font-medium">Rp ${item.hppProduk.toLocaleString('id-ID')}</td>
+                    <td class="py-3 px-3">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-bold ${profitColor}">Rp ${item.hasilSelisih.toLocaleString('id-ID')}</span>
+                    </td>
+                    <td class="py-3 px-2 text-center">
+                        <button onclick="deleteItem('${item.id}')" class="text-slate-400 hover:text-red-600 transition"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        window.applyFilters = function() {
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+            const dateFilter = document.getElementById('filterTanggal').value;
+
+            const filteredData = dataList.filter(item => {
+                const matchesSearch = item.noPesanan.toLowerCase().includes(searchQuery) || 
+                                      (item.namaAkun && item.namaAkun.toLowerCase().includes(searchQuery));
+                
+                let matchesDate = true;
+                if (dateFilter) {
+                    let itemDate = item.tanggalInput;
+                    if (!itemDate && item.timestampMs) {
+                        itemDate = new Date(item.timestampMs).toISOString().split('T')[0];
+                    }
+                    matchesDate = itemDate === dateFilter;
+                }
+
+                return matchesSearch && matchesDate;
+            });
+
+            renderTable(filteredData);
+            updateDashboardStats(filteredData);
+        }
+
+        window.clearDateFilter = function() {
+            document.getElementById('filterTanggal').value = '';
+            applyFilters();
+        }
+
+        window.deleteItem = async function(id) {
+            if (!userId) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'sales_data', id));
+                showAlert('Data transaksi dihapus.', 'info');
+            } catch (error) {}
+        }
+
+        window.clearAllData = async function() {
+            if (dataList.length === 0 || !userId) return;
+            try {
+                const snapshot = await getDocs(collection(db, 'artifacts', appId, 'users', userId, 'sales_data'));
+                const promises = [];
+                snapshot.forEach(docSnap => promises.push(deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'sales_data', docSnap.id))));
+                await Promise.all(promises);
+                showAlert('Semua data dibersihkan.', 'info');
+            } catch (error) {}
+        }
+
+        window.exportToCSV = function() {
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+            const dateFilter = document.getElementById('filterTanggal').value;
+            
+            const dataToExport = dataList.filter(item => {
+                const matchesSearch = item.noPesanan.toLowerCase().includes(searchQuery) || 
+                                      (item.namaAkun && item.namaAkun.toLowerCase().includes(searchQuery));
+                let matchesDate = true;
+                if (dateFilter) {
+                    let itemDate = item.tanggalInput;
+                    if (!itemDate && item.timestampMs) itemDate = new Date(item.timestampMs).toISOString().split('T')[0];
+                    matchesDate = itemDate === dateFilter;
+                }
+                return matchesSearch && matchesDate;
+            });
+
+            if (dataToExport.length === 0) return showAlert('Tidak ada data untuk diekspor!', 'error');
+
+            let csvContent = "data:text/csv;charset=utf-8,Waktu Input,Tanggal Transaksi,Nama Akun,No Pesanan,Jumlah (Qty),Nama Produk,Nominal Cair,Total HPP,Hasil Selisih,Catatan\r\n";
+            dataToExport.forEach(row => {
+                const safeCatatan = (row.catatan || '').replace(/"/g, '""');
+                csvContent += `"${row.timestamp}","${row.tanggalInput || '-'}","${row.namaAkun || '-'}","${row.noPesanan}","${row.qty || 1}","${row.namaProduk}",${row.nominalCair},${row.hppProduk},${row.hasilSelisih},"${safeCatatan}"\r\n`;
+            });
+            const link = document.createElement("a");
+            link.href = encodeURI(csvContent);
+            link.download = `Laporan_Penjualan_${dateFilter || new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            showAlert('Laporan CSV diunduh!', 'success');
+        }
+
+        async function sendToGoogleSheets(item) {
+            try {
+                await fetch(webhookEndpoint, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item)
+                });
+            } catch (err) {}
+        }
+
+        window.importFromGoogleSheets = async function() {
+            if (!webhookEndpoint || !userId) {
+                showAlert('Harap simpan URL Webhook yang valid terlebih dahulu!', 'error');
+                return;
+            }
+            
+            showAlert('Memproses tarikan data dari Sheets...', 'info');
+            document.getElementById('syncModal').classList.add('hidden');
+            
+            try {
+                const response = await fetch(webhookEndpoint);
+                const importedData = await response.json();
+                
+                if (importedData && importedData.length > 0) {
+                    let successCount = 0;
+                    let restoredProductCount = 0;
+                    
+                    for (const item of importedData) {
+                        if (!item.noPesanan) continue;
+                        
+                        const docId = 'ORD-' + String(item.noPesanan).replace(/[^a-zA-Z0-9]/g, '');
+                        const nominalCair = Number(item.nominalCair) || 0;
+                        const hppProduk = Number(item.hppProduk) || 0;
+                        const qty = Number(item.qty) || 1;
+                        
+                        const newItem = {
+                            timestampMs: Date.now(),
+                            timestamp: item.timestamp || '-',
+                            tanggalInput: item.tanggalInput || '-',
+                            namaAkun: item.namaAkun || '-',
+                            noPesanan: item.noPesanan,
+                            qty: qty,
+                            namaProduk: item.namaProduk || '-',
+                            nominalCair: nominalCair,
+                            hppProduk: hppProduk,
+                            hasilSelisih: nominalCair - hppProduk,
+                            catatan: item.catatan || ''
+                        };
+
+                        const docRef = doc(db, 'artifacts', appId, 'users', userId, 'sales_data', docId);
+                        await setDoc(docRef, newItem);
+                        successCount++;
+
+                        if (item.namaProduk && item.namaProduk !== '-' && hppProduk > 0) {
+                            const isExist = katalogProduk.some(p => p.nama.trim().toLowerCase() === String(item.namaProduk).trim().toLowerCase());
+                            
+                            if (!isExist) {
+                                const newProdId = 'PROD-RESTORE-' + Math.random().toString(36).substr(2, 9);
+                                const baseHpp = hppProduk / qty;
+                                const newProduct = { nama: item.namaProduk, hpp: baseHpp, timestampMs: Date.now() };
+                                
+                                await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'products', newProdId), newProduct);
+                                katalogProduk.push({ id: newProdId, ...newProduct });
+                                restoredProductCount++;
+                            }
+                        }
+                    }
+                    
+                    showAlert(`Berhasil memuat ${successCount} transaksi & memulihkan ${restoredProductCount} master produk!`, 'success');
+                } else {
+                    showAlert('Data di Google Sheets kosong atau tidak valid.', 'error');
+                }
+            } catch (error) {
+                console.error(error);
+                showAlert('Gagal menarik data. Pastikan Webhook valid.', 'error');
+            }
+        }
+
+        window.openSyncModal = function() { document.getElementById('syncModal').classList.remove('hidden'); }
+        window.closeSyncModal = function() { document.getElementById('syncModal').classList.add('hidden'); }
+        
+        window.saveWebhook = function() {
+            webhookEndpoint = document.getElementById('webhookUrl').value.trim();
+            // SIMPAN KE LOCAL STORAGE
+            localStorage.setItem('app_sales_margin_webhook', webhookEndpoint);
+            
+            document.getElementById('webhookSavedMsg').classList.remove('hidden');
+            showAlert('Konfigurasi webhook berhasil disimpan secara permanen!', 'success');
+            
+            // Opsional: Langsung tutup modal setelah simpan
+            setTimeout(() => {
+                closeSyncModal();
+            }, 1000);
+        }
+
+        window.showAlert = function(message, type) {
+            const box = document.getElementById('alertBox'), text = document.getElementById('alertText'), icon = document.getElementById('alertIcon');
+            text.textContent = message;
+            box.className = `mb-6 p-4 rounded-xl border flex items-center justify-between transition-all ${type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`;
+            icon.className = `fa-solid text-lg ${type === 'success' ? 'fa-circle-check text-emerald-600' : type === 'error' ? 'fa-triangle-exclamation text-red-600' : 'fa-circle-info text-indigo-600'}`;
+            box.classList.remove('hidden');
+            setTimeout(() => box.classList.add('hidden'), 5000);
+        }
+        window.closeAlert = function() { document.getElementById('alertBox').classList.add('hidden'); }
+        function escapeHtml(str) { return String(str||'').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+    </script>
+</body>
+</html>
