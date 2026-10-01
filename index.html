@@ -455,16 +455,23 @@
                             transaksiDiubah++;
                             
                             // Kirim update ke Google Sheets secara background
-                            if (webhookEndpoint) sendToGoogleSheets(item);
+                            if (webhookEndpoint) sendToGoogleSheets({ action: 'save_transaksi', ...item });
                         }
                     });
                     
+                    // Simpan Perubahan Produk ke Google Sheets
+                    if (webhookEndpoint) sendToGoogleSheets({ action: 'save_produk', id: editId, nama: nama, hpp: hpp });
+
                     showAlert(`Produk diperbarui & ${transaksiDiubah} transaksi terkait telah disesuaikan!`, 'success');
                 }
             } else {
                 // Mode Tambah Produk Baru
                 const newId = 'PROD-' + Date.now();
                 katalogProduk.push({ id: newId, nama: nama, hpp: hpp, timestampMs: Date.now() });
+                
+                // Simpan Produk Baru ke Google Sheets
+                if (webhookEndpoint) sendToGoogleSheets({ action: 'save_produk', id: newId, nama: nama, hpp: hpp });
+
                 showAlert('Produk baru berhasil ditambahkan!', 'success');
             }
             
@@ -522,6 +529,10 @@
             saveLocalData();
             renderProductTable();
             initDropdownProduk();
+            
+            // Hapus Produk dari Google Sheets
+            if (webhookEndpoint) sendToGoogleSheets({ action: 'delete_produk', id: id });
+
             showAlert('Produk dihapus dari memori.', 'info');
         }
         
@@ -608,7 +619,8 @@
             
             // Kirim ke Sheets di latar belakang
             if (webhookEndpoint) {
-                sendToGoogleSheets(newItem);
+                const payload = { action: 'save_transaksi', ...newItem };
+                sendToGoogleSheets(payload);
             }
         }
 
@@ -738,13 +750,13 @@
             showAlert('Laporan CSV diunduh!', 'success');
         }
 
-        async function sendToGoogleSheets(item) {
+        async function sendToGoogleSheets(payload) {
             try {
                 await fetch(webhookEndpoint, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(item)
+                    body: JSON.stringify(payload)
                 });
             } catch (err) {
                 console.error("Gagal mengirim ke Sheets di latar", err);
@@ -764,13 +776,26 @@
                 const response = await fetch(webhookEndpoint);
                 const importedData = await response.json();
                 
-                if (importedData && importedData.length > 0) {
+                if (importedData) {
                     let successCount = 0;
                     let restoredProductCount = 0;
+                    let newDataList = []; 
                     
-                    let newDataList = []; // Siapkan memori baru untuk menampung
+                    // 1. Tarik Data Master Produk Terlebih Dahulu (Jika Ada)
+                    if (importedData.produk && importedData.produk.length > 0) {
+                        katalogProduk = importedData.produk.map(p => ({
+                            id: p.id,
+                            nama: p.nama,
+                            hpp: Number(p.hpp) || 0,
+                            timestampMs: Date.now()
+                        }));
+                        restoredProductCount = katalogProduk.length;
+                    }
                     
-                    for (const item of importedData) {
+                    // 2. Tarik Data Transaksi Penjualan
+                    const transaksiList = importedData.transaksi || [];
+                    
+                    for (const item of transaksiList) {
                         if (!item.noPesanan) continue;
                         
                         const docId = 'ORD-' + String(item.noPesanan).replace(/[^a-zA-Z0-9]/g, '');
@@ -780,7 +805,7 @@
                         
                         const newItem = {
                             id: docId,
-                            timestampMs: Date.now() - successCount, // buat beda sedikit untuk sorting
+                            timestampMs: Date.now() - successCount,
                             timestamp: item.timestamp || '-',
                             tanggalInput: item.tanggalInput || '-',
                             namaAkun: item.namaAkun || '-',
@@ -796,7 +821,7 @@
                         newDataList.push(newItem);
                         successCount++;
 
-                        // Pemulihan Master Produk Otomatis
+                        // Cek ganda: Jika ada transaksi lama namun produknya belum ada di katalog (Bisa jadi terhapus)
                         if (item.namaProduk && item.namaProduk !== '-' && hppProduk > 0) {
                             const isExist = katalogProduk.some(p => p.nama.trim().toLowerCase() === String(item.namaProduk).trim().toLowerCase());
                             
@@ -805,6 +830,9 @@
                                 const baseHpp = hppProduk / qty;
                                 katalogProduk.push({ id: newProdId, nama: item.namaProduk, hpp: baseHpp, timestampMs: Date.now() });
                                 restoredProductCount++;
+                                
+                                // Simpan kembali produk yang baru dipulihkan ini ke tab Produk di Sheets
+                                sendToGoogleSheets({ action: 'save_produk', id: newProdId, nama: item.namaProduk, hpp: baseHpp });
                             }
                         }
                     }
