@@ -490,9 +490,46 @@
             document.getElementById('loadingOverlay').classList.add('hidden');
         }
 
+        // ==========================================
+        // INDEXED DB HELPER (DATABASE SUPER CEPAT)
+        // ==========================================
+        const DB_NAME = 'SalesProfitDB';
+        const STORE_NAME = 'AppStore';
+
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onupgradeneeded = (e) => {
+                    e.target.result.createObjectStore(STORE_NAME);
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function setItemDB(key, value) {
+            const db = await openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).put(value, key);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        async function getItemDB(key) {
+            const db = await openDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const request = tx.objectStore(STORE_NAME).get(key);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(tx.error);
+            });
+        }
+
         // Inisialisasi Saat Halaman Dimuat
-        window.onload = function() {
-            // Muat Webhook dari Local Storage
+        window.onload = async function() {
+            // Muat Webhook dari Local Storage (Khusus Pengaturan Webhook, tetap pakai localStorage karena sangat kecil)
             const savedWebhook = localStorage.getItem('app_sales_margin_webhook');
             if(savedWebhook) {
                 webhookEndpoint = savedWebhook;
@@ -502,18 +539,24 @@
 
             document.getElementById('tanggalInput').value = new Date().toISOString().split('T')[0];
             
-            // Memuat Data Produk & Transaksi dari Memori HP (LocalStorage)
-            loadLocalData();
+            // Tampilkan loading sebentar saat mengambil ribuan data dari DB HP
+            showLoading('Memuat Database...');
+            
+            // Memuat Data Produk & Transaksi dari Memori HP (IndexedDB)
+            await loadLocalData();
+            
+            hideLoading();
         };
 
-        // Fungsi Simpan dan Muat ke LocalStorage (Pengganti Database Cloud)
-        function loadLocalData() {
+        // Fungsi Simpan dan Muat ke IndexedDB
+        async function loadLocalData() {
             try {
-                const storedProduk = localStorage.getItem('salesprofit_katalog');
-                if (storedProduk) katalogProduk = JSON.parse(storedProduk);
+                // Tidak butuh lagi JSON.parse, karena data tersimpan dalam bentuk aslinya!
+                const storedProduk = await getItemDB('salesprofit_katalog');
+                if (storedProduk) katalogProduk = storedProduk;
                 
-                const storedTransaksi = localStorage.getItem('salesprofit_transaksi');
-                if (storedTransaksi) dataList = JSON.parse(storedTransaksi);
+                const storedTransaksi = await getItemDB('salesprofit_transaksi');
+                if (storedTransaksi) dataList = storedTransaksi;
                 
                 // Pastikan terurut dari terbaru
                 dataList.sort((a, b) => {
@@ -533,9 +576,13 @@
             applyFilters();
         }
 
-        function saveLocalData() {
-            localStorage.setItem('salesprofit_katalog', JSON.stringify(katalogProduk));
-            localStorage.setItem('salesprofit_transaksi', JSON.stringify(dataList));
+        async function saveLocalData() {
+            try {
+                await setItemDB('salesprofit_katalog', katalogProduk);
+                await setItemDB('salesprofit_transaksi', dataList);
+            } catch(e) {
+                console.error("Gagal menyimpan ke database internal", e);
+            }
         }
 
         // Fungsi Pindah Tab
@@ -618,7 +665,7 @@
                 showAlert('Produk baru berhasil ditambahkan!', 'success');
             }
             
-            saveLocalData(); // Simpan ke Memori HP
+            await saveLocalData(); // Simpan ke IndexedDB HP
             renderProductTable();
             initDropdownProduk();
             cancelEditProduct();
@@ -667,10 +714,10 @@
             });
         }
 
-        window.deleteProduct = function(id) {
+        window.deleteProduct = async function(id) {
             if(confirm("Yakin ingin menghapus produk ini? (Data transaksi lama tidak akan terpengaruh)")) {
                 katalogProduk = katalogProduk.filter(p => p.id !== id);
-                saveLocalData();
+                await saveLocalData();
                 renderProductTable();
                 initDropdownProduk();
                 
@@ -761,7 +808,7 @@
                 return (b.timestampMs || 0) - (a.timestampMs || 0);
             });
 
-            saveLocalData();
+            await saveLocalData(); // Simpan ke IndexedDB HP
             applyFilters(); // Render ulang tabel dan statistik
 
             // Reset form sebagian (Tanggal tidak direset agar cepat entry data di hari yang sama)
@@ -861,20 +908,20 @@
             applyFilters();
         }
 
-        window.deleteItem = function(id) {
+        window.deleteItem = async function(id) {
             if(confirm("Yakin ingin menghapus data transaksi ini?")) {
                 dataList = dataList.filter(d => d.id !== id);
-                saveLocalData();
+                await saveLocalData();
                 applyFilters();
                 showAlert('Data transaksi dihapus.', 'info');
             }
         }
 
-        window.clearAllData = function() {
+        window.clearAllData = async function() {
             if (dataList.length === 0) return;
             if(confirm("Yakin ingin menghapus seluruh riwayat pesanan dari HP ini? (Data di Google Sheets Anda tidak akan terhapus)")) {
                 dataList = [];
-                saveLocalData();
+                await saveLocalData();
                 applyFilters();
                 showAlert('Semua riwayat dibersihkan dari layar.', 'info');
             }
@@ -973,8 +1020,8 @@
                     
                     // Timpa memori HP dengan data terbaru dari Sheets
                     dataList = newDataList;
-                    saveLocalData();
-                    loadLocalData(); // Refresh UI
+                    await saveLocalData(); // Simpan ke IndexedDB HP
+                    await loadLocalData(); // Refresh UI
                     
                     hideLoading(); // Sembunyikan Loading
                     showAlert(`Sinkronisasi Selesai! Berhasil memuat ${successCount} transaksi.`, 'success');
@@ -1067,7 +1114,7 @@
                 jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' } // Landscape karena kolomnya banyak
             };
 
-            // Tampilkan Loading (opsional karena ini cepat)
+            // Tampilkan Loading
             showLoading('Mengekspor PDF...');
             
             html2pdf().set(opt).from(element).save().then(() => {
@@ -1088,7 +1135,7 @@
         
         window.saveWebhook = function() {
             webhookEndpoint = document.getElementById('webhookUrl').value.trim();
-            localStorage.setItem('app_sales_margin_webhook', webhookEndpoint); // Simpan Permanen
+            localStorage.setItem('app_sales_margin_webhook', webhookEndpoint); // Simpan Permanen URL
             
             document.getElementById('webhookSavedMsg').classList.remove('hidden');
             showAlert('Konfigurasi webhook tersimpan!', 'success');
