@@ -1,4 +1,4 @@
-const CACHE_NAME = "salesprofit-pwa-v22";
+const CACHE_NAME = "salesprofit-pwa-v25";
 
 const urlsToCache = [
   "./",
