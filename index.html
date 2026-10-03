@@ -108,7 +108,6 @@
                 </div>
             </div>
 
-            <!-- GRAFIK PENJUALAN -->
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-6">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
                     <h3 class="text-sm font-bold text-slate-800 flex items-center"><i class="fa-solid fa-chart-line text-indigo-600 mr-2 text-lg"></i> Tren Omzet Penjualan</h3>
@@ -122,7 +121,6 @@
                 </div>
             </div>
 
-            <!-- DAFTAR PRODUK TERLARIS -->
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-8">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
                     <h3 class="text-sm font-bold text-slate-800 flex items-center"><i class="fa-solid fa-ranking-star text-amber-500 mr-2 text-lg"></i> Top 3 Produk Terlaris</h3>
@@ -432,7 +430,7 @@
         
         async function openDB() {
             return new Promise((res, rej) => {
-                let req = indexedDB.open(DB_NAME, 2);
+                let req = indexedDB.open(DB_NAME, 3); // LEVEL DB 3
                 req.onupgradeneeded = e => { 
                     let db = e.target.result;
                     if(!db.objectStoreNames.contains(STORE_TX)) db.createObjectStore(STORE_TX, {keyPath: 'id'});
@@ -471,43 +469,44 @@
 
         window.switchTab = function(tab) {
             const allTabs = ['Penjualan', 'Pengeluaran', 'Produk', 'Packing', 'Roas'];
-            
-            // Sembunyikan semua tab secara aman
             allTabs.forEach(t => {
                 let tabEl = document.getElementById(`tab${t}`);
                 if (tabEl) tabEl.classList.add('hidden');
-                
                 let btnEl = document.getElementById(`btnTab${t}`);
                 if (btnEl) btnEl.className = "py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition";
             });
 
-            // Tampilkan tab yang dipilih
             let activeTabName = tab.charAt(0).toUpperCase() + tab.slice(1);
             let activeTabEl = document.getElementById(`tab${activeTabName}`);
             if (activeTabEl) activeTabEl.classList.remove('hidden');
-            
             let activeBtnEl = document.getElementById(`btnTab${activeTabName}`);
             if (activeBtnEl) activeBtnEl.className = "py-4 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 transition";
         }
 
         window.onload = async function() {
-            document.getElementById('tanggalInput').value = new Date().toISOString().split('T')[0];
-            document.getElementById('tglPengeluaran').value = new Date().toISOString().split('T')[0];
-            if(webhookEndpoint) document.getElementById('webhookUrl').value = webhookEndpoint;
-            
-            showLoading("Memuat Database Internal...");
-            katalogProduk = await getAllDB(STORE_PROD);
-            dataList = await getAllDB(STORE_TX);
-            dataPengeluaran = await getAllDB(STORE_EXP);
-            dataPacking = await getAllDB(STORE_PACKING);
-            
-            dataList.sort((a,b) => b.timestampMs - a.timestampMs);
-            dataPengeluaran.sort((a,b) => new Date(formatYMD(b.tanggal)) - new Date(formatYMD(a.tanggal)));
-            
-            renderProductTable(); initDropdownProduk(); 
-            renderPackingTable(); initDropdownPacking(); initDropdownRoas();
-            renderPengeluaran(); applyFilters(); updateDatalistAkun();
-            hideLoading();
+            try {
+                document.getElementById('tanggalInput').value = new Date().toISOString().split('T')[0];
+                document.getElementById('tglPengeluaran').value = new Date().toISOString().split('T')[0];
+                if(webhookEndpoint) document.getElementById('webhookUrl').value = webhookEndpoint;
+                
+                showLoading("Memuat Database Internal...");
+                katalogProduk = await getAllDB(STORE_PROD);
+                dataList = await getAllDB(STORE_TX);
+                dataPengeluaran = await getAllDB(STORE_EXP);
+                dataPacking = await getAllDB(STORE_PACKING);
+                
+                dataList.sort((a,b) => b.timestampMs - a.timestampMs);
+                dataPengeluaran.sort((a,b) => new Date(formatYMD(b.tanggal)) - new Date(formatYMD(a.tanggal)));
+                
+                renderProductTable(); initDropdownProduk(); 
+                renderPackingTable(); initDropdownPacking(); initDropdownRoas();
+                renderPengeluaran(); applyFilters(); updateDatalistAkun();
+            } catch (err) {
+                console.error("Gagal memuat Database:", err);
+                alert("Ada kesalahan memuat memori HP. Pastikan penyimpanan tidak penuh.");
+            } finally {
+                hideLoading();
+            }
         };
 
         window.formatRupiahInput = function(input) {
@@ -641,6 +640,15 @@
             const status = document.getElementById('statusPesanan').value;
             const id = editId || ('ORD-' + noPes.replace(/[^a-zA-Z0-9]/g, '') + '-' + Date.now());
 
+            const hasilSelisih = cair - hpp - biayaPacking;
+
+            // CEK MINUS / RUGI
+            if (hasilSelisih < 0) {
+                if(!confirm(`⚠️ PERINGATAN (RUGI)!\n\nNominal Cair (Rp ${cair.toLocaleString('id-ID')}) lebih kecil dari total HPP + Packing (Rp ${(hpp + biayaPacking).toLocaleString('id-ID')}).\n\nHitungan Laba: Rp ${hasilSelisih.toLocaleString('id-ID')}\n\nApakah Anda yakin nominal ini sudah benar dan ingin menyimpannya?`)) {
+                    return; // Batal simpan
+                }
+            }
+
             const item = {
                 id: id, timestampMs: editId ? (dataList.find(d=>d.id===editId).timestampMs) : Date.now(),
                 timestamp: new Date().toLocaleString('id-ID'), tanggalInput: tgl,
@@ -648,7 +656,7 @@
                 qty: qty, namaProduk: prd ? prd.nama : '-', 
                 namaPacking: pck ? pck.nama : '-', biayaPacking: biayaPacking,
                 nominalCair: cair, hppProduk: hpp,
-                hasilSelisih: cair - hpp - biayaPacking, status: status, catatan: ""
+                hasilSelisih: hasilSelisih, status: status, catatan: ""
             };
 
             if(editId) { let idx = dataList.findIndex(d => d.id === editId); if(idx>-1) dataList[idx] = item; } else { dataList.unshift(item); }
@@ -805,7 +813,7 @@
             document.getElementById('statHpp').textContent = 'Rp ' + tHpp.toLocaleString('id-ID');
             document.getElementById('statPacking').textContent = 'Rp ' + tPacking.toLocaleString('id-ID');
             document.getElementById('statPengeluaran').textContent = 'Rp ' + tPengeluaran.toLocaleString('id-ID');
-            document.getElementById('statNetProfit').textContent = 'Rp ' + (tProfit - tPengeluaran).toLocaleString('id-ID'); // Fix Laba Bersih = Kotor - Pengeluaran
+            document.getElementById('statNetProfit').textContent = 'Rp ' + (tProfit - tPengeluaran).toLocaleString('id-ID');
             
             refreshTopProducts(); updateChart();
         }
@@ -866,7 +874,7 @@
             document.getElementById('pdfOmzet').textContent = 'Rp ' + tCair.toLocaleString('id-ID');
             document.getElementById('pdfHpp').textContent = 'Rp ' + tHpp.toLocaleString('id-ID');
             document.getElementById('pdfPengeluaran').textContent = 'Rp ' + tPengeluaran.toLocaleString('id-ID');
-            document.getElementById('pdfNet').textContent = 'Rp ' + (tProfit - tPengeluaran).toLocaleString('id-ID'); // Fix Laba Bersih
+            document.getElementById('pdfNet').textContent = 'Rp ' + (tProfit - tPengeluaran).toLocaleString('id-ID');
             document.getElementById('pdfPreviewModal').classList.remove('hidden');
         }
         
