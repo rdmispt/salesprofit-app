@@ -794,6 +794,15 @@
 
         window.showAlert = function(m, t) { let b=document.getElementById('alertBox'), i=document.getElementById('alertIcon'); document.getElementById('alertText').textContent = m; b.className=`mb-6 p-4 rounded-xl border flex items-center justify-between transition-all shadow-sm ${t==='success'?'bg-emerald-50 border-emerald-200 text-emerald-800':'bg-red-50 border-red-200 text-red-800'}`; i.className=`fa-solid text-lg ${t==='success'?'fa-circle-check text-emerald-600':'fa-triangle-exclamation text-red-600'}`; b.classList.remove('hidden'); setTimeout(()=>b.classList.add('hidden'),5000); }
         window.closeAlert = function() { document.getElementById('alertBox').classList.add('hidden'); }
+
+        // ================= REGISTER SERVICE WORKER (UNTUK INSTALL PWA KE HP) =================
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((reg) => console.log('Service Worker PWA aktif!', reg.scope))
+                    .catch((err) => console.log('Gagal mengaktifkan PWA:', err));
+            });
+        }
     </script>
 </body>
 </html>
